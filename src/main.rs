@@ -253,13 +253,20 @@ fn simulate_game(starter: &str, word: &str, debug: bool) -> (bool, usize) {
 fn main() {
     lazy_static::initialize(&DICT);
     lazy_static::initialize(&LETTERS);
-    let starter = "bears";
+    let _: Vec<()> = ANSWER_DICT.par_iter().map(|starter| {
+		//let starter = "movie";
+		let results: Vec<(bool, usize)> = ANSWER_DICT.par_iter().map(|word| {
+			simulate_game(starter, ANSWER_DICT.choose(&mut rand::thread_rng()).unwrap(), false)
+		}).collect();
+		let correct_counts: Vec<usize> = results.iter().filter(|x| x.0).map(|x| x.1).collect();
+		let sum: usize = correct_counts.iter().sum();
+		let correct = correct_counts.len();
+		let avg = sum as f64/correct as f64;
+		let failed = results.iter().filter(|x| !x.0).count();
+		
+		println!("{}: {} correct, average of {:.2} guesses. {} incorrect, {:.2}%", starter, correct, avg, failed, failed as f64/ANSWER_DICT.len() as f64);
+		()
+    }).collect();
     
-    let (won, guesses) = simulate_game(starter, ANSWER_DICT.choose(&mut rand::thread_rng()).unwrap(), false);
-    if won {
-		println!("Solved after {} guesses", guesses);
-    } else {
-		println!("Failed after {} guesses", guesses);
-    }
 
 }
