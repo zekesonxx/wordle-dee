@@ -106,6 +106,7 @@ impl WordleGame {
         let mut grey = 0;
         let mut global_revealed = 0.0;
         let mut local_revealed = 0.0;
+        let mut revealed_letters = vec![];
         'outer: for i in 0..5 {
             if let Some(c) = self.green[i] {
                 if guess[i] == c {
@@ -118,13 +119,21 @@ impl WordleGame {
                 continue;
             }
             for (lpos, l) in self.yellow.iter().enumerate() {
-                if l.contains(&guess[i]) && lpos != i {
-                    yellow += 1;
+                if l.contains(&guess[i]) {
+					if lpos == i {
+						// yellow on this spot counts as a grey
+						grey += 1
+					} else {
+						yellow += 1;
+					}
                     continue 'outer;
                 }
             }
-            global_revealed += LETTERS[&guess[i]].global_freq;
-            local_revealed += LETTERS[&guess[i]].local_freq[i];
+            if !revealed_letters.contains(&guess[i]) {
+				revealed_letters.push(guess[i]);
+				global_revealed += LETTERS[&guess[i]].global_freq;
+				local_revealed += LETTERS[&guess[i]].local_freq[i];
+            }
         }
 
         debug_assert!(green+yellow+grey <= 5);
@@ -162,13 +171,14 @@ impl fmt::Display for WordleGame {
         for i in &self.grey {
             write!(f, "{}", i)?;
         }
+        write!(f, "\n{:?}", self.yellow)?;
 
         Ok(())
     }
 }
 
 lazy_static! {
-    static ref DICT: Vec<&'static str> = {
+    static ref NONANSWER_DICT: Vec<&'static str> = {
         let dict = include_str!("../dict.txt");
         let dict: Vec<&str> = dict.split('\n').filter(|x| x.len() == 5).collect();
         dict
@@ -177,6 +187,11 @@ lazy_static! {
         let answers = include_str!("../answers.txt");
         let answers: Vec<&str> = answers.split('\n').filter(|x| x.len() == 5).collect();
         answers
+    };
+    static ref DICT: Vec<&'static str> = {
+		let mut dict = NONANSWER_DICT.clone();
+		dict.append(&mut ANSWER_DICT.clone());
+		dict
     };
     static ref LETTERS: HashMap::<char, LetterStats> = {
         let mut letters = HashMap::<char, LetterStats>::with_capacity(26);
@@ -199,7 +214,7 @@ lazy_static! {
 fn main() {
     lazy_static::initialize(&DICT);
     lazy_static::initialize(&LETTERS);
-    let starter = "irate";
+    let starter = "bears";
     let mut game = WordleGame::new(ANSWER_DICT.choose(&mut rand::thread_rng()).unwrap());
     println!("{}", game);
     game.guess(starter);
@@ -207,29 +222,36 @@ fn main() {
     let mut guesses = 1;
     while !game.has_won() && guesses < 6 {
         guesses += 1;
-        let mut guess: Vec<(&&str, (usize, usize, usize, f64, f64))> = DICT.par_iter().filter_map(|word| {
+        let mut guess: Vec<(&&str, (usize, usize, usize, f64, f64))> = ANSWER_DICT.par_iter().filter_map(|word| {
             if let Some(x) = game.consider_guess(word) {
                 Some((word, x))
             } else {
                 None
             }
         })
-        //.filter(|x| x.1.2 == 0)
+        .filter(|x| x.1.2 == 0)
         .collect();
-
+        
         guess.par_sort_by(|x, y| x.1.3.partial_cmp(&y.1.3).unwrap());
         guess.par_sort_by(|x, y| x.1.4.partial_cmp(&y.1.4).unwrap());
         guess.par_sort_by_key(|x| x.1.1);
+        //guess.par_sort_by(|x, y| x.1.2.cmp(&y.1.2).reverse());
         guess.par_sort_by_key(|x| x.1.0);
+        
         guess.reverse();
         for i in 0..cmp::min(10, guess.len()) {
-            println!("{}. {} G{} Y{} G{} {:.2}%G {:.2}%L",
-                    i, guess[i].0, guess[i].1.0, guess[i].1.1, guess[i].1.2, guess[i].1.3, guess[i].1.4);
+            println!("{:2.}. {} G{} Y{} G{} {:.2}%G {:.2}%L",
+                    i+1, guess[i].0, guess[i].1.0, guess[i].1.1, guess[i].1.2, guess[i].1.3, guess[i].1.4);
         }
         println!();
         println!("guess: {:?}", guess[0]);
         game.guess(guess[0].0);
         println!("{}", game);
+    }
+    if game.has_won() {
+		println!("Solved after {} guesses", guesses);
+    } else {
+		println!("Failed after {} guesses", guesses);
     }
 
 }
