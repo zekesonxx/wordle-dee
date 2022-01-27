@@ -211,14 +211,10 @@ lazy_static! {
     };
 }
 
-fn main() {
-    lazy_static::initialize(&DICT);
-    lazy_static::initialize(&LETTERS);
-    let starter = "bears";
-    let mut game = WordleGame::new(ANSWER_DICT.choose(&mut rand::thread_rng()).unwrap());
-    println!("{}", game);
+fn simulate_game(starter: &str, word: &str, debug: bool) -> (bool, usize) {
+	let mut game = WordleGame::new(word);
+    if debug { println!("{}", game); }
     game.guess(starter);
-    println!("{:?}", game);
     let mut guesses = 1;
     while !game.has_won() && guesses < 6 {
         guesses += 1;
@@ -239,16 +235,28 @@ fn main() {
         guess.par_sort_by_key(|x| x.1.0);
         
         guess.reverse();
-        for i in 0..cmp::min(10, guess.len()) {
-            println!("{:2.}. {} G{} Y{} G{} {:.2}%G {:.2}%L",
-                    i+1, guess[i].0, guess[i].1.0, guess[i].1.1, guess[i].1.2, guess[i].1.3, guess[i].1.4);
+        if debug {
+			for i in 0..cmp::min(10, guess.len()) {
+				println!("{:2.}. {} G{} Y{} G{} {:.2}%G {:.2}%L",
+						i+1, guess[i].0, guess[i].1.0, guess[i].1.1, guess[i].1.2, guess[i].1.3, guess[i].1.4);
+			}
+			
+			println!();
+			println!("guess: {:?}", guess[0]);
         }
-        println!();
-        println!("guess: {:?}", guess[0]);
         game.guess(guess[0].0);
-        println!("{}", game);
+        if debug { println!("{}", game); }
     }
-    if game.has_won() {
+    (game.has_won(), guesses)
+}
+
+fn main() {
+    lazy_static::initialize(&DICT);
+    lazy_static::initialize(&LETTERS);
+    let starter = "bears";
+    
+    let (won, guesses) = simulate_game(starter, ANSWER_DICT.choose(&mut rand::thread_rng()).unwrap(), false);
+    if won {
 		println!("Solved after {} guesses", guesses);
     } else {
 		println!("Failed after {} guesses", guesses);
